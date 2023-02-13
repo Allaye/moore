@@ -17,7 +17,7 @@ class Helper:
         self.all_characters = string.printable
         self.n_characters = len(self.all_characters)
         self.file = unidecode.unidecode(open('../data.txt').read())
-        self.num_epochs = 2
+        self.num_epochs = 2000
         self.batch_size = 1
         self.lr = 0.001
         self.hidden_size = 100
@@ -57,10 +57,10 @@ class Helper:
         prime_input = self.char_to_tensor(prime_str)
         predicted = prime_str
         for p in range(len(prime_str) - 1):
-            _, (hidden, cell) = self.moore(prime_input[p].view(1), (hidden, cell))
+            _, (hidden, cell) = self.moore(prime_input[p].view(1), hidden, cell)
         last_char = prime_input[-1]
         for p in range(predict_len):
-            output, (hidden, cell) = self.moore(last_char.view(1), (hidden, cell))
+            output, (hidden, cell) = self.moore(last_char.view(1), hidden, cell)
             output_dist = output.data.view(-1).div(temperature).exp()
             top_char = torch.multinomial(output_dist, 1)[0]
             predicted_char = self.all_characters[top_char]
