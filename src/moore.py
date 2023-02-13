@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
 
 
 class MooreMachineLSTM(nn.Module):
@@ -19,8 +18,7 @@ class MooreMachineLSTM(nn.Module):
         # Forward propagate LSTM
         out, (hidden, cell) = self.lstm(out.unsqueeze(1), (hidden, cell))
         out = out.reshape(out.shape[0], -1)
-        # Decode the hidden state of the last time step
-        out = self.fc(out[:, -1, :])
+
         return out, (hidden, cell)
 
     def init_hidden(self, batch_size):
@@ -37,5 +35,5 @@ class MooreMachineLSTM(nn.Module):
         :return: loss function and optimizer
         """
         loss_fn = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr, momentum=momentum)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         return loss_fn, optimizer

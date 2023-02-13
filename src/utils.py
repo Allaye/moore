@@ -1,5 +1,9 @@
-import string, random, sys, unidecode
+import random
+import string
+import unidecode
 import torch
+# from torch.utils.tensorboard import SummaryWriter
+
 from moore import MooreMachineLSTM
 
 # get all ascii characters
@@ -12,13 +16,13 @@ class Helper:
         self.chunk_len = 200
         self.all_characters = string.printable
         self.n_characters = len(self.all_characters)
-        self.file = unidecode.unidecode(open('data/names.txt').read())
-        self.num_epochs = 2000
+        self.file = unidecode.unidecode(open('../data.txt').read())
+        self.num_epochs = 2
         self.batch_size = 1
         self.lr = 0.001
         self.hidden_size = 100
         self.num_layers = 2
-        self.print_every = 100
+        self.print_every = 2
         self.plot_every = 10
         self.all_losses = []
 
@@ -44,32 +48,45 @@ class Helper:
         text_input = torch.zeros(self.batch_size, self.chunk_len)
         text_target = torch.zeros(self.batch_size, self.chunk_len)
         for i in range(self.batch_size):
-            text_input = self.char_to_tensor(text_str[:-1])
-            text_target = self.char_to_tensor(text_str[1:])
+            text_input[i, :] = self.char_to_tensor(text_str[:-1])
+            text_target[i, :] = self.char_to_tensor(text_str[1:])
         return text_input.long(), text_target.long()
 
     def moore_generator(self, prime_str='A', predict_len=100, temperature=0.8):
-
-        pass
+        hidden, cell = self.moore.init_hidden(self.batch_size)
+        prime_input = self.char_to_tensor(prime_str)
+        predicted = prime_str
+        for p in range(len(prime_str) - 1):
+            _, (hidden, cell) = self.moore(prime_input[p].view(1), (hidden, cell))
+        last_char = prime_input[-1]
+        for p in range(predict_len):
+            output, (hidden, cell) = self.moore(last_char.view(1), (hidden, cell))
+            output_dist = output.data.view(-1).div(temperature).exp()
+            top_char = torch.multinomial(output_dist, 1)[0]
+            predicted_char = self.all_characters[top_char]
+            predicted += predicted_char
+            last_char = self.char_to_tensor(predicted_char)
+        return predicted
 
     def train(self):
         # create a moore machine
-        moore = MooreMachineLSTM(self.n_characters, self.hidden_size, self.n_characters, self.num_layers)
+        self.moore = MooreMachineLSTM(self.n_characters, self.hidden_size, self.n_characters, self.num_layers)
         # create the loss function
         loss_fn = torch.nn.CrossEntropyLoss()
         # create the optimizer
-        loss_fn, optimizer = moore.loss_optimizer()
-        optimizer = torch.optim.Adam(moore.parameters(), lr=self.lr)
+        loss_fn, optimizer = self.moore.loss_optimizer()
+        optimizer = torch.optim.Adam(self.moore.parameters(), lr=self.lr)
         print(f'Training starting...')
         for epoch in range(1, self.num_epochs + 1):
             # get the input and target tensors
             inputs, targets = self.get_random_batch()
-            hidden, cell = moore.init_hidden(self.batch_size)
+            # initialize the hidden state
+            hidden, cell = self.moore.init_hidden(self.batch_size)
             # zero the gradients
             optimizer.zero_grad()
             loss = 0
             for c in range(self.chunk_len):
-                output, (hidden, cell) = moore(inputs[:, c], (hidden, cell))
+                output, (hidden, cell) = self.moore(inputs[:, c], hidden, cell)
                 loss += loss_fn(output, targets[:, c])
             # perform backpropagation
             loss.backward()
@@ -79,43 +96,18 @@ class Helper:
             # if the epoch is a multiple of the print every
             if epoch % self.print_every == 0:
                 # print the epoch and the loss
-                print(f'epoch: {epoch}, loss: {loss.item()}')
+                print(f'epoch: {epoch}, loss: {loss}')
+                print(self.moore_generator('Wh', 100, 0.8))
             # if the epoch is a multiple of the plot every
-            if epoch % self.plot_every == 0:
-                # add the loss to the all losses list
-                self.all_losses.append(loss.item())
-
-            writer.add_scalar('Loss/train', loss, epoch)
+            # if epoch % self.plot_every == 0:
+            #     # add the loss to the all losses list
+            #     self.all_losses.append(loss.item())
+            #
+            # SummaryWriter.add_scalar('Loss/train', loss, epoch)
         # save the model
-        torch.save(moore.state_dict(), 'moore.pt')
+        torch.save(self.moore.state_dict(), 'moore.pt')
 
 
-# print(f'Helper', torch.zeros(len('adfd')).long().shape)
-# tensor = torch.zeros(len('adfd')).long()
-# char = 'adfd'
-# for idx in range(len(char)):
-#     print(f'idx', idx)
-#     tensor[idx] = all_characters.index(char[idx])
-#
-# print(f'tensor', tensor)
-file = unidecode.unidecode(open('../data.txt').read())
-# # print(f'file', file)
-# print(f'len(file)', len(file))
-# for i in file:
-#     print(f'i', i)
-#     break
-#
-# print(f'len(file)', len(file) - 200)
-# v = random.randint(0, len(file) - 200)
-# b = v + 200 + 1
-# print(f'v', v)
-# print(f'b', b)
-# text_str = file[v:b]
-# text_input = text_str[:-1]
-# text_target = text_str[1:]
-# print(f'text_str', text_str)
-# print(f'text_input', text_input)
-# print(f'text_target', text_target)
-
-
-d = torch.zeros(1, 5)
+if __name__ == '__main__':
+    util = Helper()
+    util.train()
